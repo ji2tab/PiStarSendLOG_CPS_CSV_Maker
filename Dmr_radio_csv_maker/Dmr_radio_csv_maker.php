@@ -2,7 +2,7 @@
 /*
 Plugin Name: DMR Radio CSV Maker
 Description: hotspot/_cache/user.csv から通常CSV・H1用CSVを生成してダウンロード。ショートコード: [dmr_csv_maker]
-Version: 1.4.2
+Version: 1.4.3
 Author: JI2TAB
 Requires at least: 5.0
 Requires PHP: 7.4
@@ -158,10 +158,9 @@ add_shortcode('dmr_csv_maker', function($atts) {
         .hcm-info { color: #555; font-size: 13px; margin-bottom: 16px; }
         .hcm-auth-form { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 24px; margin-bottom: 20px; }
         .hcm-auth-form p { margin-top: 0; font-size: 15px; }
-        .hcm-auth-table { width: 100%; border-collapse: collapse; }
-        .hcm-auth-table td { padding: 8px 4px; font-size: 15px; }
-        .hcm-auth-table td:first-child { font-weight: bold; width: 130px; white-space: nowrap; }
-        .hcm-auth-table input[type=text] { width: 100%; padding: 8px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .hcm-auth-row { margin-bottom: 14px; }
+        .hcm-auth-row label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 15px; }
+        .hcm-auth-row input[type=text] { width: 100%; padding: 8px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         .hcm-error { color: #c00; background: #fff0f0; border: 1px solid #f5c6cb; border-radius: 4px; padding: 10px 14px; margin-bottom: 16px; }
         .hcm-success { color: #1a7a1a; background: #f0fff0; border: 1px solid #b2dfb2; border-radius: 4px; padding: 10px 14px; margin-bottom: 16px; }
         .hcm-dl-form { margin-bottom: 16px; }
@@ -224,16 +223,14 @@ add_shortcode('dmr_csv_maker', function($atts) {
             <p>ダウンロードにはコールサインとDMR IDによる認証が必要です。</p>
             <form method="post">
                 <?php wp_nonce_field('hcm_auth', 'hcm_auth_nonce'); ?>
-                <table class="hcm-auth-table">
-                    <tr>
-                        <td>コールサイン</td>
-                        <td><input type="text" name="hcm_callsign" value="<?php echo esc_attr($callsign); ?>" autocomplete="off"></td>
-                    </tr>
-                    <tr>
-                        <td>DMR ID</td>
-                        <td><input type="text" name="hcm_dmr_id" value="<?php echo esc_attr($dmr_id); ?>" autocomplete="off"></td>
-                    </tr>
-                </table>
+                <div class="hcm-auth-row">
+                    <label>コールサイン</label>
+                    <input type="text" name="hcm_callsign" value="<?php echo esc_attr($callsign); ?>" autocomplete="off">
+                </div>
+                <div class="hcm-auth-row">
+                    <label>DMR ID</label>
+                    <input type="text" name="hcm_dmr_id" value="<?php echo esc_attr($dmr_id); ?>" autocomplete="off">
+                </div>
                 <button type="submit" class="hcm-btn hcm-btn-submit">認証してダウンロード画面へ</button>
             </form>
         </div>
