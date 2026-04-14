@@ -2,7 +2,7 @@
 
 # =================================================
 # スクリプト名: hotspot_setup.sh
-# バージョン: 2.2.0
+# バージョン: 2.2.2
 # 概要: MMDVMログ監視サービスのセットアップ
 # =================================================
 
@@ -13,7 +13,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "================================================="
-echo "   Hotspot Watcher v2.2.0 セットアップ"
+echo "   Hotspot Watcher v2.2.2 セットアップ"
 echo "================================================="
 
 # --- 2. ユーザー入力（デフォルト値なし・必須入力） ---
@@ -37,11 +37,18 @@ while true; do
   echo "   ❌ APIトークンを入力してください。"
 done
 
+while true; do
+  read -p "4. ネットワーク表示名 (例: TGIF TG168 / XLX834-Z): " NET_LABEL
+  [ -n "$NET_LABEL" ] && break
+  echo "   ❌ ネットワーク表示名を入力してください。"
+done
+
 echo ""
-echo "  接続先サーバー : ${SERVER_HOST}"
-echo "  エンドポイント : ${ENDPOINT}"
-echo "  ノード名       : ${NODE_NAME}"
-echo "  APIトークン    : ${API_TOKEN}"
+echo "  接続先サーバー     : ${SERVER_HOST}"
+echo "  エンドポイント     : ${ENDPOINT}"
+echo "  ノード名           : ${NODE_NAME}"
+echo "  APIトークン        : ${API_TOKEN}"
+echo "  ネットワーク表示名 : ${NET_LABEL}"
 echo ""
 read -p "上記の設定で続行しますか？ [y/N]: " CONFIRM
 case "$CONFIRM" in
@@ -70,9 +77,10 @@ import os, time, json, re, logging, urllib.request
 from datetime import datetime, timezone, timedelta
 
 # --- 基本設定（hotspot_setup.sh により自動生成） ---
-ENDPOINT = "ENDPOINT_PLACEHOLDER"
-TOKEN    = "TOKEN_PLACEHOLDER"
-NODE_NAME= "NODE_PLACEHOLDER"
+ENDPOINT  = "ENDPOINT_PLACEHOLDER"
+TOKEN     = "TOKEN_PLACEHOLDER"
+NODE_NAME = "NODE_PLACEHOLDER"
+NET_LABEL = "NETLABEL_PLACEHOLDER"
 LOG_DIR  = "/var/log/pi-star"
 
 logging.basicConfig(
@@ -112,7 +120,7 @@ END_P = re.compile(
 )
 
 def main():
-    logging.info("Hotspot Watcher v2.2.0 started. Node=%s" % NODE_NAME)
+    logging.info("Hotspot Watcher v2.2.2 started. Node=%s" % NODE_NAME)
     session_buffer = {}
     prev_sizes = {}
 
@@ -152,9 +160,11 @@ def main():
                                         ).replace(tzinfo=timezone.utc)
                                         dt_jst = dt_utc + timedelta(hours=9)
                                         payload = {
-                                            "node":      NODE_NAME,
-                                            "callsign":  s['call'],
-                                            "timestamp": dt_jst.strftime("%Y-%m-%d %H:%M:%S"),
+                                            "node":        NODE_NAME,
+                                            "source_node": NODE_NAME,
+                                            "net_label":   NET_LABEL,
+                                            "callsign":    s['call'],
+                                            "timestamp":   dt_jst.strftime("%Y-%m-%d %H:%M:%S"),
                                             "dmr": {
                                                 "slot": int(s['slot']),
                                                 "src":  s['src'],
@@ -173,9 +183,10 @@ if __name__ == "__main__":
 PYEOF
 
 # プレースホルダーを実際の値に置換
-sed -i "s|ENDPOINT_PLACEHOLDER|${ENDPOINT}|g" "${PYTHON_SCRIPT}"
-sed -i "s|TOKEN_PLACEHOLDER|${API_TOKEN}|g"   "${PYTHON_SCRIPT}"
-sed -i "s|NODE_PLACEHOLDER|${NODE_NAME}|g"    "${PYTHON_SCRIPT}"
+sed -i "s|ENDPOINT_PLACEHOLDER|${ENDPOINT}|g"   "${PYTHON_SCRIPT}"
+sed -i "s|TOKEN_PLACEHOLDER|${API_TOKEN}|g"     "${PYTHON_SCRIPT}"
+sed -i "s|NODE_PLACEHOLDER|${NODE_NAME}|g"      "${PYTHON_SCRIPT}"
+sed -i "s|NETLABEL_PLACEHOLDER|${NET_LABEL}|g"  "${PYTHON_SCRIPT}"
 
 chmod +x "${PYTHON_SCRIPT}"
 
