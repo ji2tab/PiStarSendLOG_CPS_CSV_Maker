@@ -1,0 +1,211 @@
+<svg width="100%" viewBox="0 0 680 820" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>DMR Hotspot Log System 構成図</title>
+<desc>Pi-StarからWordPressへの交信ログ送信システムの全体構成図</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+<style>
+  text { font-family: sans-serif; fill: #1a1a1a; }
+  .th  { font-size: 14px; font-weight: 500; }
+  .ts  { font-size: 12px; font-weight: 400; fill: #444; }
+  .arr { stroke: #888; stroke-width: 1.2; fill: none; }
+  .leader { stroke: #aaa; stroke-width: 0.5; stroke-dasharray: 3 2; fill: none; }
+
+  /* c-teal */
+  .c-teal > rect, .c-teal > ellipse { fill: #E1F5EE; stroke: #0F6E56; }
+  .c-teal > text.th { fill: #085041; }
+  .c-teal > text.ts { fill: #0F6E56; }
+
+  /* c-green */
+  .c-green > rect { fill: #EAF3DE; stroke: #3B6D11; }
+  .c-green > text.th { fill: #27500A; }
+  .c-green > text.ts { fill: #3B6D11; }
+
+  /* c-blue */
+  .c-blue > rect { fill: #E6F1FB; stroke: #185FA5; }
+  .c-blue > text.th { fill: #0C447C; }
+  .c-blue > text.ts { fill: #185FA5; }
+
+  /* c-purple */
+  .c-purple > rect { fill: #EEEDFE; stroke: #534AB7; }
+  .c-purple > text.th { fill: #3C3489; }
+  .c-purple > text.ts { fill: #534AB7; }
+
+  /* c-amber */
+  .c-amber > rect { fill: #FAEEDA; stroke: #854F0B; }
+  .c-amber > text.th { fill: #633806; }
+  .c-amber > text.ts { fill: #854F0B; }
+
+  /* c-coral */
+  .c-coral > rect { fill: #FAECE7; stroke: #993C1D; }
+  .c-coral > text.th { fill: #712B13; }
+  .c-coral > text.ts { fill: #993C1D; }
+
+  /* c-gray */
+  .c-gray > rect { fill: #F1EFE8; stroke: #5F5E5A; }
+  .c-gray > text.th { fill: #444441; }
+  .c-gray > text.ts { fill: #5F5E5A; }
+</style>
+</defs>
+
+<!-- ===== Pi-Star ゾーン ===== -->
+<g class="c-teal">
+  <rect x="30" y="30" width="290" height="260" rx="14" stroke-width="0.5"/>
+  <text class="th" x="175" y="58" text-anchor="middle">Pi-Star / Raspberry Pi</text>
+</g>
+
+<!-- MMDVM -->
+<g class="c-teal">
+  <rect x="55" y="75" width="240" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="175" y="97" text-anchor="middle">MMDVM</text>
+  <text class="ts" x="175" y="115" text-anchor="middle">DMRホットスポット</text>
+</g>
+
+<!-- ログファイル -->
+<g class="c-gray">
+  <rect x="55" y="148" width="240" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="175" y="168" text-anchor="middle">MMDVM-YYYY-MM-DD.log</text>
+  <text class="ts" x="175" y="186" text-anchor="middle">/var/log/pi-star/</text>
+</g>
+
+<!-- hotspot_watch.py -->
+<g class="c-green">
+  <rect x="55" y="220" width="240" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="175" y="241" text-anchor="middle">hotspot_watch.py</text>
+  <text class="ts" x="175" y="259" text-anchor="middle">2秒ごとに監視・検出・送信</text>
+</g>
+
+<!-- Pi-Star内の矢印 -->
+<line x1="175" y1="127" x2="175" y2="146" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+<line x1="175" y1="200" x2="175" y2="218" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+
+<!-- hotspot_setup.sh -->
+<g class="c-gray">
+  <rect x="30" y="315" width="290" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="175" y="337" text-anchor="middle">hotspot_setup.sh</text>
+  <text class="ts" x="175" y="355" text-anchor="middle">watch.py + serviceを自動生成</text>
+</g>
+
+<!-- setup.sh → Pi-Star (生成) -->
+<path d="M175 315 L175 292" fill="none" stroke="#aaa" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<text class="ts" x="182" y="305" fill="#666">生成</text>
+
+<!-- ===== 中央矢印 ===== -->
+<!-- POST送信 -->
+<path d="M320 252 L360 252" fill="none" stroke="#1D9E75" stroke-width="1.5" marker-end="url(#arrow)"/>
+<text class="ts" x="340" y="244" text-anchor="middle" fill="#0F6E56">POST</text>
+<text class="ts" x="340" y="264" text-anchor="middle" fill="#0F6E56">/ingest</text>
+
+<!-- wget -->
+<path d="M360 341 L320 341" fill="none" stroke="#aaa" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<text class="ts" x="340" y="333" text-anchor="middle" fill="#666">wget</text>
+<text class="ts" x="340" y="353" text-anchor="middle" fill="#666">setup.sh</text>
+
+<!-- ===== WordPress ゾーン ===== -->
+<g class="c-blue">
+  <rect x="360" y="30" width="290" height="520" rx="14" stroke-width="0.5"/>
+  <text class="th" x="505" y="58" text-anchor="middle">WordPress / Webサーバー</text>
+</g>
+
+<!-- hotspot-total-v2.php ラベル -->
+<g class="c-blue">
+  <rect x="383" y="75" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="97" text-anchor="middle">hotspot-total-v2.php</text>
+  <text class="ts" x="505" y="115" text-anchor="middle">v2.4.12</text>
+</g>
+
+<!-- REST API受信 -->
+<g class="c-gray">
+  <rect x="383" y="148" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="169" text-anchor="middle">REST API受信</text>
+  <text class="ts" x="505" y="187" text-anchor="middle">トークン認証・名前補完・保存</text>
+</g>
+
+<!-- NW優先ロジック -->
+<g class="c-gray">
+  <rect x="383" y="221" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="242" text-anchor="middle">NW優先ロジック</text>
+  <text class="ts" x="505" y="260" text-anchor="middle">5秒以内同時受信はNW優先</text>
+</g>
+
+<!-- JSONファイル -->
+<g class="c-gray">
+  <rect x="383" y="294" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="315" text-anchor="middle">inbox-*.json</text>
+  <text class="ts" x="505" y="333" text-anchor="middle">uploads/hotspot/{node}/</text>
+</g>
+
+<!-- AJAX自動更新 -->
+<g class="c-blue">
+  <rect x="383" y="367" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="388" text-anchor="middle">AJAX自動更新</text>
+  <text class="ts" x="505" y="406" text-anchor="middle">30秒ごとにテーブル更新</text>
+</g>
+
+<!-- setup.sh配信 -->
+<g class="c-gray">
+  <rect x="383" y="440" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="461" text-anchor="middle">setup.sh配信</text>
+  <text class="ts" x="505" y="479" text-anchor="middle">GET /wp-json/hotspot/setup.sh</text>
+</g>
+
+<!-- WP-Cron -->
+<g class="c-purple">
+  <rect x="383" y="513" width="244" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="534" text-anchor="middle">WP-Cron（毎日1回）</text>
+  <text class="ts" x="505" y="552" text-anchor="middle">radioid.net user.csv取得</text>
+</g>
+
+<!-- WP内の矢印 -->
+<line x1="505" y1="127" x2="505" y2="146" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+<line x1="505" y1="200" x2="505" y2="219" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+<line x1="505" y1="273" x2="505" y2="292" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+<line x1="505" y1="346" x2="505" y2="365" stroke="#888" stroke-width="1.2" fill="none" marker-end="url(#arrow)"/>
+
+<!-- ===== radioid.net ===== -->
+<g class="c-amber">
+  <rect x="360" y="590" width="290" height="52" rx="8" stroke-width="0.5"/>
+  <text class="th" x="505" y="611" text-anchor="middle">radioid.net</text>
+  <text class="ts" x="505" y="629" text-anchor="middle">user.csv（DMRユーザーDB）</text>
+</g>
+<path d="M505 590 L505 567" fill="none" stroke="#BA7517" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+<!-- ===== dmr-radio-csv-maker ===== -->
+<g class="c-coral">
+  <rect x="30" y="590" width="290" height="80" rx="14" stroke-width="0.5"/>
+  <text class="th" x="175" y="614" text-anchor="middle">dmr-radio-csv-maker.php</text>
+  <text class="ts" x="175" y="632" text-anchor="middle">v1.4.3</text>
+  <text class="ts" x="175" y="650" text-anchor="middle">コールサイン・DMRID認証</text>
+  <text class="ts" x="175" y="668" text-anchor="middle">通常CSV / H1用CSV 生成</text>
+</g>
+
+<!-- user.csv共有 -->
+<path d="M360 616 L322 616" fill="none" stroke="#BA7517" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<text class="ts" x="341" y="608" text-anchor="middle" fill="#854F0B">共有</text>
+
+<!-- ===== ユーザー（ブラウザ） ===== -->
+<g class="c-gray">
+  <rect x="30" y="710" width="620" height="80" rx="14" stroke-width="0.5"/>
+  <text class="th" x="340" y="735" text-anchor="middle">ユーザー（ブラウザ / スマートフォン）</text>
+  <text class="ts" x="175" y="758" text-anchor="middle">アクセス状況ページを閲覧</text>
+  <text class="ts" x="505" y="758" text-anchor="middle">CSVダウンロード・無線機にインポート</text>
+</g>
+
+<!-- ユーザー ↔ WP -->
+<path d="M505 710 L505 572" fill="none" stroke="#aaa" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="516" y="695" fill="#666">閲覧</text>
+
+<!-- ユーザー → CSV -->
+<path d="M175 710 L175 672" fill="none" stroke="#aaa" stroke-width="1" marker-end="url(#arrow)"/>
+<text class="ts" x="186" y="695" fill="#666">DL</text>
+
+<!-- ===== 凡例 ===== -->
+<rect x="30" y="490" width="10" height="10" rx="2" fill="#1D9E75"/>
+<text class="ts" x="46" y="500" fill="#444">交信データ（POST）</text>
+<line x1="30" y1="516" x2="40" y2="516" stroke="#aaa" stroke-width="1" stroke-dasharray="4 3"/>
+<text class="ts" x="46" y="520" fill="#444">setup.sh配信（wget）</text>
+<line x1="30" y1="536" x2="40" y2="536" stroke="#BA7517" stroke-width="1" stroke-dasharray="4 3"/>
+<text class="ts" x="46" y="540" fill="#444">user.csv共有</text>
+
+</svg>
