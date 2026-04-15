@@ -38,9 +38,12 @@ while true; do
 done
 
 while true; do
-  read -p "4. ネットワーク表示名 (例: TGIF TG168 / XLX834-Z): " NET_LABEL
-  [ -n "$NET_LABEL" ] && break
-  echo "   ❌ ネットワーク表示名を入力してください。"
+  read -p "4. ネットワーク表示名・英数半角10文字まで (例: TGIF168 / XLX834Z): " NET_LABEL
+  [ -z "$NET_LABEL" ] && echo "   ❌ ネットワーク表示名を入力してください。" && continue
+  if echo "$NET_LABEL" | grep -qP '^[A-Za-z0-9 ]{1,10}$'; then
+    break
+  fi
+  echo "   ❌ 英数字・スペースのみ、10文字以内で入力してください。"
 done
 
 echo ""
@@ -122,7 +125,17 @@ END_P = re.compile(
 def main():
     logging.info("Hotspot Watcher v2.2.2 started. Node=%s" % NODE_NAME)
     session_buffer = {}
+
+    # 起動時に既存ログファイルの現在サイズを記録（過去分をスキップ）
     prev_sizes = {}
+    try:
+        for fname in os.listdir(LOG_DIR):
+            if fname.startswith("MMDVM-") and fname.endswith(".log"):
+                path = os.path.join(LOG_DIR, fname)
+                prev_sizes[fname] = os.path.getsize(path)
+                logging.info("Skip existing: %s (%d bytes)" % (fname, prev_sizes[fname]))
+    except Exception as ex:
+        logging.error("Init error: " + str(ex))
 
     while True:
         time.sleep(2)
