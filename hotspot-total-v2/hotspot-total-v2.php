@@ -2,7 +2,7 @@
 /*
 Plugin Name: Hotspot Total Solution V2
 Description: 決定版：自動ファイル整理・高機能表示UI。ショートコード: [hotspot_log_display]
-Version: 2.3.0
+Version: 2.4.12
 Author: JI2TAB
 */
 
@@ -180,24 +180,55 @@ function hts_api_handler($request) {
     $dir = trailingslashit(wp_upload_dir()['basedir']) . 'hotspot/' . $node;
     if(!file_exists($dir)) wp_mkdir_p($dir);
 
-    // 【修正】同じコールサインのファイルを確実に削除
+    // 新着データのSrcを取得
+    $new_src = strtoupper($data['dmr']['src'] ?? 'RF');
+
+    // 同じコールサインの既存ファイルを検索
     $files = glob($dir . '/inbox-*.json');
+    $existing_file = null;
+    $existing_src  = 'RF';
     foreach($files as $f) {
-        $content = file_get_contents($f);
-        $old = json_decode($content, true);
-        $old_call = strtoupper($old['callsign'] ?? ($old['dmr']['callsign'] ?? ''));
+        $old_data = json_decode(file_get_contents($f), true);
+        $old_call = strtoupper($old_data['callsign'] ?? ($old_data['dmr']['callsign'] ?? ''));
         if($old_call === $callsign) {
-            @unlink($f);
+            $existing_file = $f;
+            $existing_src  = strtoupper($old_data['dmr']['src'] ?? 'RF');
+            break;
         }
+    }
+
+    // NW優先ルール（5秒以内の同時受信を想定）:
+    // 既存がNWで新着がRF → 5秒以内なら既存NWを維持、5秒以上なら新しい交信としてRFで上書き
+    if($existing_file && $existing_src === 'NETWORK' && $new_src !== 'NETWORK') {
+        $existing_ts  = filemtime($existing_file);
+        $diff_seconds = abs(time() - $existing_ts);
+        if($diff_seconds <= 5) {
+            return ['ok'=>true, 'node'=>$node, 'callsign'=>$callsign, 'action'=>'kept existing NW (within 5sec)'];
+        }
+        // 5秒以上経過 → 新しい交信としてRFで上書き
+    }
+
+    // 既存を削除して新着を保存
+    if($existing_file) {
+        @unlink($existing_file);
     }
 
     // 新規保存
     file_put_contents($dir.'/inbox-'.date('Ymd-His').'.json', wp_json_encode($data, JSON_UNESCAPED_UNICODE));
-    return ['ok'=>true, 'node'=>$node, 'callsign'=>$callsign];
+    return ['ok'=>true, 'node'=>$node, 'callsign'=>$callsign, 'action'=>'saved'];
 }
 
 // 3. 表示機能 (ショートコード)
 add_shortcode('hotspot_log_display', function($atts) {
+    // キャッシュ無効化
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+
+    // WP Super Cache / W3 Total Cache 対策
+    if(!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+    if(!defined('DONOTCACHEDB'))   define('DONOTCACHEDB', true);
+
     $node = (isset($atts['node']) ? $atts['node'] : '') ?: get_option('hotspot_default_node');
     if(!$node) return '<p style="color:red;">ノードが設定されていません。設定画面で規定のノードを入力してください。</p>';
 
@@ -222,34 +253,145 @@ add_shortcode('hotspot_log_display', function($atts) {
         $rows[] = $d;
     }
 
-    $out = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-family:sans-serif; font-size:14px;">';
-    $out .= '<thead><tr style="background:#f4f4f4; border-bottom:2px solid #ccc;">';
-    $out .= '<th style="padding:10px; text-align:left;">DATE</th>';
-    $out .= '<th style="padding:10px; text-align:left;">TIME</th>';
-    $out .= '<th style="padding:10px; text-align:left;">Callsign</th>';
-    $out .= '<th style="padding:10px; text-align:left;">Src</th>';
-    $out .= '<th style="padding:10px; text-align:left;">Name</th>';
+    $out  = '<style>';
+    $out .= '.hts-log-wrap { font-family: sans-serif; width: 100% !important; display: block; }';
+    $out .= '.hts-log-updated { font-size: 12px; color: #999; margin-bottom: 12px; }';
+    $out .= '.hts-log-table { width: 100% !important; border-collapse: collapse; font-size: 14px; table-layout: fixed; }';
+    $out .= '.hts-log-table th:nth-child(1) { width: 5%; text-align: center; }';  /* No. */
+    $out .= '.hts-log-table th:nth-child(2) { width: 12%; }';  /* Callsign */
+    $out .= '.hts-log-table th:nth-child(3) { width: auto; }'; /* Name - 残り幅を使う */
+    $out .= '.hts-log-table th:nth-child(4) { width: 14%; }';  /* Src/Net */
+    $out .= '.hts-log-table th:nth-child(5) { width: 14%; }';  /* Date */
+    $out .= '.hts-log-table th:nth-child(6) { width: 12%; }';  /* Time */
+    $out .= '.hts-no { text-align: center; color: #999; font-size: 12px; }';
+    $out .= '.hts-log-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }';
+    $out .= '.hts-name { color: #444; white-space: normal; word-break: break-word; }';
+    $out .= '.hts-log-table thead tr { border-bottom: 2px solid #2271b1; }';
+    $out .= '.hts-log-table th { padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #2271b1; font-weight: 600; white-space: nowrap; }';
+    $out .= '.hts-log-table tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.15s; }';
+    $out .= '.hts-log-table tbody tr:hover { background: #f7fbff; }';
+    $out .= '.hts-log-table td { padding: 10px 12px; vertical-align: middle; }';
+    $out .= '.hts-call { font-weight: 700; font-size: 15px; letter-spacing: 0.04em; color: #1a1a1a; }';
+    $out .= '.hts-name { color: #444; }';
+    $out .= '.hts-time { color: #666; font-size: 13px; white-space: nowrap; }';
+    $out .= '.hts-badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }';
+    $out .= '.hts-badge-rf { background: #e8f4e8; color: #2d7a2d; }';
+    $out .= '.hts-badge-nw { background: #e8eef8; color: #2255aa; }';
+    $out .= '</style>';
+
+    $out .= '<div class="hts-log-wrap"><div id="hts-log-container" style="overflow-x:auto; width:100%;">';
+    $out .= '<table class="hts-log-table">';
+    $out .= '<thead><tr>';
+    $out .= '<th>No.</th>';
+    $out .= '<th>Callsign</th>';
+    $out .= '<th>Name</th>';
+    $out .= '<th>Src</th>';
+    $out .= '<th>Date</th>';
+    $out .= '<th>Time</th>';
     $out .= '</tr></thead><tbody>';
 
-    foreach($rows as $d) {
-        $ts = strtotime($d['timestamp_local'] ?? $d['timestamp']);
+    foreach($rows as $i => $d) {
+        $i = $i + 1; // 1始まりに
+        $ts   = strtotime($d['timestamp_local'] ?? $d['timestamp']);
         $call = esc_html($d['callsign'] ?? ($d['dmr']['callsign'] ?? '---'));
-        $src = strtoupper($d['dmr']['src'] ?? '') === 'NETWORK' ? 'NW' : 'RF';
-        // nameがなければCSVから補完
-        $name = esc_html($d['name'] ?? hts_lookup_name($d['callsign'] ?? '') ?: '---');
+        $raw_src     = strtoupper($d['dmr']['src'] ?? '');
+        $is_nw       = ($raw_src === 'NETWORK');
+        $net_label   = esc_html($d['net_label'] ?? '');
+        $src_label   = $is_nw ? ($net_label ?: 'NW') : 'RF';
+        $name        = esc_html($d['name'] ?? hts_lookup_name($d['callsign'] ?? '') ?: '---');
+        $badge_class = $is_nw ? 'hts-badge-nw' : 'hts-badge-rf';
 
-        $out .= '<tr style="border-bottom:1px solid #eee;">';
-        $out .= '<td style="padding:10px;">'.date('Y-m-d',$ts).'</td>';
-        $out .= '<td style="padding:10px;">'.date('H:i:s',$ts).'</td>';
-        $out .= '<td style="padding:10px;"><strong>'.$call.'</strong></td>';
-        $out .= '<td style="padding:10px;">'.$src.'</td>';
-        $out .= '<td style="padding:10px;">'.$name.'</td>';
+        $out .= '<tr>';
+        $out .= '<td class="hts-no">' . $i . '</td>';
+        $out .= '<td><span class="hts-call">' . $call . '</span></td>';
+        $out .= '<td><span class="hts-name">' . $name . '</span></td>';
+        $out .= '<td><span class="hts-badge ' . $badge_class . '">' . $src_label . '</span></td>';
+        $out .= '<td><span class="hts-time">' . date('Y-m-d', $ts) . '</span></td>';
+        $out .= '<td><span class="hts-time">' . date('H:i:s', $ts) . '</span></td>';
         $out .= '</tr>';
     }
-    $out .= '</tbody></table></div>';
-    
+    $out .= '</tbody></table></div></div>';
+
+    // 30秒ごとにテーブル部分だけAJAXで更新
+    $ajax_url = admin_url('admin-ajax.php');
+    $out .= '<script>
+(function() {
+    var interval = 30000;
+    var nonce = "' . wp_create_nonce('hts_refresh') . '";
+    var node  = "' . esc_js($node) . '";
+    function refreshLog() {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "' . esc_url(admin_url('admin-ajax.php')) . '", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.responseText) {
+                var container = document.getElementById("hts-log-container");
+                if (container) container.innerHTML = xhr.responseText;
+            }
+        };
+        xhr.send("action=hts_refresh_log&nonce=" + nonce + "&node=" + encodeURIComponent(node));
+    }
+    setInterval(refreshLog, interval);
+})();
+</script>';
+
     return $out;
 });
+
+// ── AJAXログ更新ハンドラー ──────────────────────────────────
+add_action('wp_ajax_hts_refresh_log',        'hts_ajax_refresh_log');
+add_action('wp_ajax_nopriv_hts_refresh_log', 'hts_ajax_refresh_log');
+
+function hts_ajax_refresh_log() {
+    check_ajax_referer('hts_refresh', 'nonce');
+    $node = sanitize_key($_POST['node'] ?? '');
+    if (!$node) wp_die('');
+
+    $dir   = trailingslashit(wp_upload_dir()['basedir']) . 'hotspot/' . $node;
+    $files = glob($dir . '/inbox-*.json');
+    if (!$files) { echo ''; wp_die(); }
+
+    usort($files, function($a, $b){ return filemtime($b) - filemtime($a); });
+
+    $seen = []; $rows = [];
+    foreach ($files as $f) {
+        $d    = json_decode(file_get_contents($f), true);
+        if (!$d) continue;
+        $call = strtoupper($d['callsign'] ?? '');
+        if (!$call || isset($seen[$call])) continue;
+        $seen[$call] = true;
+        $rows[] = $d;
+    }
+
+    $out  = '<table class="hts-log-table">';
+    $out .= '<thead><tr>';
+    $out .= '<th>No.</th><th>Callsign</th><th>Name</th><th>Src</th><th>Date</th><th>Time</th>';
+    $out .= '</tr></thead><tbody>';
+
+    foreach ($rows as $i => $d) {
+        $i    = $i + 1;
+        $ts   = strtotime($d['timestamp_local'] ?? $d['timestamp']);
+        $call = esc_html($d['callsign'] ?? '---');
+        $raw_src   = strtoupper($d['dmr']['src'] ?? '');
+        $is_nw     = ($raw_src === 'NETWORK');
+        $net_label = esc_html($d['net_label'] ?? '');
+        $src_label = $is_nw ? ($net_label ?: 'NW') : 'RF';
+        $name      = esc_html($d['name'] ?? hts_lookup_name($d['callsign'] ?? '') ?: '---');
+        $badge_class = $is_nw ? 'hts-badge-nw' : 'hts-badge-rf';
+
+        $out .= '<tr>';
+        $out .= '<td class="hts-no">' . $i . '</td>';
+        $out .= '<td><span class="hts-call">' . $call . '</span></td>';
+        $out .= '<td><span class="hts-name">' . $name . '</span></td>';
+        $out .= '<td><span class="hts-badge ' . $badge_class . '">' . $src_label . '</span></td>';
+        $out .= '<td><span class="hts-time">' . date('Y-m-d', $ts) . '</span></td>';
+        $out .= '<td><span class="hts-time">' . date('H:i:s', $ts) . '</span></td>';
+        $out .= '</tr>';
+    }
+    $out .= '</tbody></table>';
+    echo $out;
+    wp_die();
+}
 
 // ── hotspot_setup.sh 配信エンドポイント ──────────────────────
 add_action('rest_api_init', function () {
@@ -266,7 +408,7 @@ function hts_serve_setup_sh() {
 
 # =================================================
 # スクリプト名: hotspot_setup.sh
-# バージョン: 2.2.0
+# バージョン: 2.2.2
 # 概要: MMDVMログ監視サービスのセットアップ
 # =================================================
 
@@ -277,7 +419,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "================================================="
-echo "   Hotspot Watcher v2.2.0 セットアップ"
+echo "   Hotspot Watcher v2.2.2 セットアップ"
 echo "================================================="
 
 # --- 2. ユーザー入力（デフォルト値なし・必須入力） ---
@@ -301,11 +443,21 @@ while true; do
   echo "   ❌ APIトークンを入力してください。"
 done
 
+while true; do
+  read -p "4. ネットワーク表示名・英数半角10文字まで (例: TGIF168 / XLX834Z): " NET_LABEL
+  [ -z "$NET_LABEL" ] && echo "   ❌ ネットワーク表示名を入力してください。" && continue
+  if echo "$NET_LABEL" | grep -qP '^[A-Za-z0-9 ]{1,10}$'; then
+    break
+  fi
+  echo "   ❌ 英数字・スペースのみ、10文字以内で入力してください。"
+done
+
 echo ""
-echo "  接続先サーバー : ${SERVER_HOST}"
-echo "  エンドポイント : ${ENDPOINT}"
-echo "  ノード名       : ${NODE_NAME}"
-echo "  APIトークン    : ${API_TOKEN}"
+echo "  接続先サーバー     : ${SERVER_HOST}"
+echo "  エンドポイント     : ${ENDPOINT}"
+echo "  ノード名           : ${NODE_NAME}"
+echo "  APIトークン        : ${API_TOKEN}"
+echo "  ネットワーク表示名 : ${NET_LABEL}"
 echo ""
 read -p "上記の設定で続行しますか？ [y/N]: " CONFIRM
 case "$CONFIRM" in
@@ -334,9 +486,10 @@ import os, time, json, re, logging, urllib.request
 from datetime import datetime, timezone, timedelta
 
 # --- 基本設定（hotspot_setup.sh により自動生成） ---
-ENDPOINT = "ENDPOINT_PLACEHOLDER"
-TOKEN    = "TOKEN_PLACEHOLDER"
-NODE_NAME= "NODE_PLACEHOLDER"
+ENDPOINT  = "ENDPOINT_PLACEHOLDER"
+TOKEN     = "TOKEN_PLACEHOLDER"
+NODE_NAME = "NODE_PLACEHOLDER"
+NET_LABEL = "NETLABEL_PLACEHOLDER"
 LOG_DIR  = "/var/log/pi-star"
 
 logging.basicConfig(
@@ -376,9 +529,19 @@ END_P = re.compile(
 )
 
 def main():
-    logging.info("Hotspot Watcher v2.2.0 started. Node=%s" % NODE_NAME)
+    logging.info("Hotspot Watcher v2.2.2 started. Node=%s" % NODE_NAME)
     session_buffer = {}
+
+    # 起動時に既存ログファイルの現在サイズを記録（過去分をスキップ）
     prev_sizes = {}
+    try:
+        for fname in os.listdir(LOG_DIR):
+            if fname.startswith("MMDVM-") and fname.endswith(".log"):
+                path = os.path.join(LOG_DIR, fname)
+                prev_sizes[fname] = os.path.getsize(path)
+                logging.info("Skip existing: %s (%d bytes)" % (fname, prev_sizes[fname]))
+    except Exception as ex:
+        logging.error("Init error: " + str(ex))
 
     while True:
         time.sleep(2)
@@ -416,9 +579,11 @@ def main():
                                         ).replace(tzinfo=timezone.utc)
                                         dt_jst = dt_utc + timedelta(hours=9)
                                         payload = {
-                                            "node":      NODE_NAME,
-                                            "callsign":  s['call'],
-                                            "timestamp": dt_jst.strftime("%Y-%m-%d %H:%M:%S"),
+                                            "node":        NODE_NAME,
+                                            "source_node": NODE_NAME,
+                                            "net_label":   NET_LABEL,
+                                            "callsign":    s['call'],
+                                            "timestamp":   dt_jst.strftime("%Y-%m-%d %H:%M:%S"),
                                             "dmr": {
                                                 "slot": int(s['slot']),
                                                 "src":  s['src'],
@@ -437,9 +602,10 @@ if __name__ == "__main__":
 PYEOF
 
 # プレースホルダーを実際の値に置換
-sed -i "s|ENDPOINT_PLACEHOLDER|${ENDPOINT}|g" "${PYTHON_SCRIPT}"
-sed -i "s|TOKEN_PLACEHOLDER|${API_TOKEN}|g"   "${PYTHON_SCRIPT}"
-sed -i "s|NODE_PLACEHOLDER|${NODE_NAME}|g"    "${PYTHON_SCRIPT}"
+sed -i "s|ENDPOINT_PLACEHOLDER|${ENDPOINT}|g"   "${PYTHON_SCRIPT}"
+sed -i "s|TOKEN_PLACEHOLDER|${API_TOKEN}|g"     "${PYTHON_SCRIPT}"
+sed -i "s|NODE_PLACEHOLDER|${NODE_NAME}|g"      "${PYTHON_SCRIPT}"
+sed -i "s|NETLABEL_PLACEHOLDER|${NET_LABEL}|g"  "${PYTHON_SCRIPT}"
 
 chmod +x "${PYTHON_SCRIPT}"
 
