@@ -1,265 +1,198 @@
-# DMR Hotspot Log System — システム全体ドキュメント
+リポジトリ内の4ファイル完全分離構成、WPSDログの不規則なスペース分割の吸収、および交信終了（`end of voice`）同期タイミングといった最新のシステム仕様をすべて網羅し、ASCIIアートによるフォルダ構成・相関図を組み込んだ決定版の **`README-system.md`** を再作成しました。
 
-**システム名:** DMR Hotspot Log System  
-**最終更新:** 2026-04-14  
+これをそのままシステム全体のマスタードキュメントとして上書き保存してご活用ください。
+
+---
+
+# DMR Hotspot Log System — システム全体仕様書 (README-system.md)
+
+**システム名:** DMR Hotspot Log System (WPSD対応・DBカラム自動解析版)
+
+**最終更新:** 2026-05-20
+
 **作成者:** JI2TAB / あいちデジタル通信ハムクラブ JJ2YYK
 
 ---
 
-## システム概要
+## 📋 1. システム概要
 
-DMR（Digital Mobile Radio）ホットスポットへの交信ログをリアルタイムでWebサイトに表示し、DMRユーザーデータベースのCSVファイルを無線機へダウンロード提供するシステムです。
+本システムは、DMR（Digital Mobile Radio）ホットスポットの交信ログをWPSD/Pi-Star環境からリアルタイムに収集し、Webサイト上にユーザー名（団体名）付きで動的表示するとともに、無線機用のコンタクトリストCSVデータを自動生成・配信する統合システムです。
 
-Pi-Star（Raspberry Pi）上の監視サービスと、WordPressプラグイン群が連携して動作します。
-
----
-
-## 構成コンポーネントと現行バージョン
-
-| ファイル | 種別 | バージョン | 動作環境 |
-|---|---|---|---|
-| `hotspot_setup.sh` | シェルスクリプト | 2.2.2 | Pi-Star（Raspberry Pi） |
-| `hotspot-total-v2.php` | WordPressプラグイン | 2.4.12 | WordPress（Webサーバー） |
-| `dmr-radio-csv-maker.php` | WordPressプラグイン | 1.4.3 | WordPress（Webサーバー） |
+最新バージョンでは、従来のようにテキストファイル（`user.csv`）を毎回パースする方式を廃止し、親プラグイン（Master Base）がMySQLデータベースに直接インポートした名簿テーブル（`wp_dmrcm_users` 等）を全自動で探索・解析して100%確実に名前解決（Name解決）を行うアーキテクチャへ進化しました。
 
 ---
 
-## データの流れ
+## 📁 2. システムファイル・フォルダ一覧
 
-### 1. 交信ログの流れ
+GitHubリポジトリ（`PiStarSendLOG_V2`）およびWordPressプラグインディレクトリ内は、機能保守性を最大化するため以下の**4つの独立したプラグインファイル**およびPi-Star側スクリプトに完全分離・整理されています。
 
-```
-PTTを押して離す
-  → MMDVMがログに記録（/var/log/pi-star/MMDVM-YYYY-MM-DD.log）
-  → hotspot_watch.py が2秒ごとに監視・検出
-  → JSON形式でWordPress REST APIへPOST送信
-      {node, source_node, net_label, callsign, timestamp, dmr{slot,src,dst}}
-  → hotspot-total-v2.php が受信
-      ↓ トークン認証
-      ↓ radioid.net user.csv でコールサインから名前を補完
-      ↓ NW優先ロジックで保存（5秒以内の同時受信はNWを優先）
-      ↓ uploads/hotspot/{ノード名}/inbox-YYYYMMDD-HHmmss.json に保存
-  → Webページで30秒ごとに自動更新して表示
-```
-
-### 2. CSVダウンロードの流れ
-
-```
-radioid.net → user.csv（毎日1回・WP-Cronで自動取得）
-  → uploads/hotspot/_cache/user.csv に保存
-
-ユーザーがCSVダウンロードページにアクセス
-  → コールサイン・DMR IDを入力
-  → user.csv と照合して認証
-  → 対象国を選択
-  → 通常CSV または H1用CSV を生成・ダウンロード
-  → ダウンロードログに記録（download_log.csv）
-```
-
-### 3. セットアップスクリプトの配信
-
-```
-Pi-Star管理者
-  → wget https://jj2yyk.forums.gr.jp/wp-json/hotspot/setup.sh
-  → hotspot_setup.sh を取得・実行
-  → hotspot_watch.py と systemdサービスを自動生成・登録
-```
-
----
-
-## NW優先ロジック
-
-複数のPi-Starから同一コールサインのデータが届く場合の保存ルールです。
-
-| 既存データ | 新着データ | 時間差 | 結果 |
-|---|---|---|---|
-| RF | NW | — | NWで上書き |
-| NW | RF | **5秒以内** | 既存NWを維持（同時受信と判断） |
-| NW | RF | **5秒以上** | RFで上書き（新しい交信と判断） |
-| RF | RF | — | 新しいRFで上書き |
-
----
-
-## ファイル・フォルダ構成
-
-### WordPress側（Webサーバー）
-
-```
+```text
+[WordPress側（Webサーバー）]
 wp-content/
-  plugins/
-    hotspot-total-v2/
-      hotspot-total-v2.php        ← 交信ログ受信・表示・CSV管理・setup.sh配信
-    dmr-radio-csv-maker/
-      dmr-radio-csv-maker.php     ← CSVダウンロード提供
-  uploads/
-    hotspot/
-      _cache/
-        user.csv                  ← radioid.netから毎日取得するユーザーDB
-        download_log.csv          ← CSVダウンロード履歴
-      {ノード名}/                  ← 例: yyk-tgif/
-        inbox-YYYYMMDD-HHmmss.json  ← 交信ログ（1交信1ファイル）
-```
+└── plugins/
+    ├── hotspot-receiver/
+    │   └── hotspot-receiver.php       # 交信ログ受信・DB自動解析・JSON保存
+    ├── hotspot-display/
+    │   └── hotspot-display.php        # [hotspot_log_display] ショートコード・AJAX更新
+    ├── dmr-radio-csv-maker/
+    │   └── Dmr_radio_csv_maker.php    # 無線機用CSV生成コアエンジン
+    └── dmr-radio-csv-downloader/
+        └── Dmr_radio_csv_downloader.php # ユーザー認証・CSVダウンロードUI
+wp-content/uploads/
+└── hotspot/
+    └── {ノード名}/                     # 例: yyk-tgif/
+        └── inbox-YYYYMMDD-HHmmss.json # 完全同期された交信ログ（1交信1ファイル）
 
-### Pi-Star側（Raspberry Pi）
-
-```
+[Pi-Star / WPSD側（Raspberry Pi）]
 /root/
-  hotspot_setup.sh      ← セットアップスクリプト（wgetで取得）
-  hotspot_watch.py      ← MMDVMログ監視・送信スクリプト（自動生成）
+├── hotspot_setup.sh                    # 環境自動構築シェルスクリプト
+└── hotspot_watch_test.py               # WPSDログ常駐監視・確定時送信スクリプト
 /etc/systemd/system/
-  hotspot_watch.service ← systemdサービス定義（自動生成）
+└── hotspot_watch.service               # 監視スクリプトを自動常駐化するユニット定義
 /var/log/pi-star/
-  MMDVM-YYYY-MM-DD.log  ← MMDVMが出力する交信ログ（監視対象）
+└── MMDVM-YYYY-MM-DD.log                # MMDVM/WPSDが出力する生ログ（監視対象）
+
 ```
 
 ---
 
-## APIエンドポイント一覧
+## 🔄 3. システムコンポーネント相関図
 
-| エンドポイント | メソッド | 認証 | 用途 |
-|---|---|---|---|
-| `/wp-json/hotspot/ingest` | POST | X-Hotspot-Tokenヘッダー | Pi-Starから交信ログを受信 |
-| `/wp-json/hotspot/setup.sh` | GET | なし | hotspot_setup.shをwgetで配信 |
-| `/wp-admin/admin-ajax.php` | POST | nonce | 表示テーブルのAJAX自動更新 |
+WPSDでの交信終了から、MySQLデータベースでの自動名前解決を経て、Webブラウザへリアルタイム表示されるまでの相関関係です。
 
----
+```text
+ +--------------------------------------------------------------------------------+
+ |                          Pi-Star / WPSD (Raspberry Pi)                         |
+ |                                                                                |
+ |  [無線機 / ネットワーク]                                                       |
+ |         │                                                                      |
+ |         ▼ PTT離す (交信終了)                                                   |
+ |  +──────────────────────+                                                      |
+ |  │ MMDVM生ログファイル  │                                                      |
+ |  │ (MMDVM-YYYY-MM-DD)   │                                                      |
+ |  +──────────┬───────────+                                                      |
+ |             │                                                                  |
+ |             │ (リアルタイム監視: "end of voice" を検知)                        |
+ |             ▼                                                                  |
+ |  +──────────────────────+                                                      |
+ |  │hotspot_watch_test.py │                                                      |
+ |  │       (v4.1.0)       │                                                      |
+ |  +──────────┬───────────+                                                      |
+ +-------------│------------------------------------------------------------------+
+               │
+               │ [HTTPS POST送信] (コールサイン情報をJSONでパケット化)
+               │ エンドポイント: /wp-json/hotspot/ingest
+               ▼
+ +--------------------------------------------------------------------------------+
+ |                           WordPressサーバー (Web)                              |
+ |                                                                                |
+ |  ======================= 【ログ受信 & 名前解決処理】 =======================   |
+ |                                                                                |
+ |  +──────────────────────+                                                      |
+ |  │ hotspot-receiver.php │                                                      |
+ |  │       (v4.2.0)       │                                                      |
+ |  +──────────┬───────────+                                                      |
+ |             │                                                                  |
+ |             │ 🔍 [SQLクエリ] 自動巡回・改行ゴミ(\r)除去完全一致照合            |
+ |             ▼                                                                  |
+ |      [MySQLデータベース]                                                       |
+ |      └── テーブル: wp_dmrcm_users (または wp_dmr_users)                         |
+ |           ├── 列: callsign  ➔ 送信局のコールサイン                             |
+ |           └── 列: name      ➔ CSV3列目の団体名・名前 (1列統合型)               |
+ |             │                                                                  |
+ |             │ ➔ 100%合致した【団体名・お名前】を引っ張り出す                   |
+ |             ▼                                                                  |
+ |  +──────────────────────────────────────────────────────────+                  |
+ |  │ 💾 ログフォルダへのJSON書き出し                          │                  |
+ |  │ uploads/hotspot/{ノード名}/inbox-YYYYMMDD-HHmmss.json     │                  |
+ |  │ (中身: "callsign": "JJ2YYK", "name": "あいちデジタル...")│                  |
+ |  +──────────────────────────────────────────────────────────+                  |
+ |                                                                                |
+ |                                                                                |
+ |  ======================= 【フロントエンド表示処理】 =======================   |
+ |                                                                                |
+ |   [Webブラウザ (固定ページ)] 💻                                                 |
+ |         │                                                                      |
+ |         │ 🔄 30秒ごとの AJAX非同期通信 (`hld_display_refresh`)                 |
+ |         ▼                                                                  |
+ |  +──────────────────────+                                                      |
+ |  │  hotspot-display.php │ ➔ ショートコード [hotspot_log_display]               |
+ |  │       (v4.2.0)       │ ➔ 重複排除 & 最新順ソートしてHTMLテーブル化         |
+ |  +----------------------+                                                      |
+ |                                                                                |
+ |  ====================== 【無線機用CSV配信エンジン】 ======================   |
+ |                                                                                |
+ |  +────────────────────────────+      +──────────────────────────────+          |
+ |  │  Dmr_radio_csv_maker.php   │ ◄──► │ Dmr_radio_csv_downloader.php │          |
+ |  │ (無線機幅最適化CSV生成)    │      │ (コールサイン・DMR IDユーザー認証)│          |
+ |  +────────────────────────────+      +──────────────────────────────+          |
+ +--------------------------------------------------------------------------------+
 
-## セットアップ順序
-
-### WordPress側
-
-1. `hotspot-total-v2.php` を `wp-content/plugins/hotspot-total-v2/` に配置して有効化
-2. 「設定 → Hotspot 設定」でトークンとノード名を設定
-3. 「今すぐ取得」ボタンでradioid.netのuser.csvを取得
-4. `dmr-radio-csv-maker.php` を `wp-content/plugins/dmr-radio-csv-maker/` に配置して有効化
-5. 交信ログ表示ページに `[hotspot_log_display]` を追加
-6. CSVダウンロードページに `[dmr_csv_maker]` を追加
-
-### Pi-Star側
-
-```bash
-rpi-rw
-wget -O /root/hotspot_setup.sh https://jj2yyk.forums.gr.jp/wp-json/hotspot/setup.sh
-chmod +x /root/hotspot_setup.sh
-sudo /root/hotspot_setup.sh
 ```
 
-セットアップ時の入力項目：
+---
 
-| 番号 | 項目 | 例 |
-|---|---|---|
-| 1 | 接続先サーバー | `jj2yyk.forums.gr.jp` |
-| 2 | ノード名 | `yyk-tgif` |
-| 3 | APIトークン | （管理者から案内） |
-| 4 | ネットワーク表示名 | `TGIF168` / `XLX834Z`（英数半角10文字以内） |
+## 🔄 4. 詳細なデータの流れ
 
-### 動作確認
+### ① 交信終了ログの発生から表示まで
 
-```bash
-# サービス状態確認
-sudo systemctl status hotspot_watch
+1. **交信終了の記録:** 無線局がPTTを離すと、WPSD/MMDVMが `/var/log/pi-star/MMDVM-YYYY-MM-DD.log` に `end of voice` または `transmission lost` を記録します。
+2. **ログの検知と送信:** `hotspot_watch_test.py` が、WPSD特有の不規則なスペース分割を正規表現で吸収しながらログを検知。話し始めでのフライング送信を行わず、交信が確定した瞬間にJSONパケットを構築してWordPressの REST API（`/wp-json/hotspot/ingest`）へPOST送信します。
+3. **名簿DBによる動的自動解決 (`hotspot-receiver.php`):**
+* 受信したコールサインをもとに、MySQLデータベース内から `LIKE '%dmr%'` で名簿テーブル（`wp_dmrcm_users` または `wp_dmr_users`）を自動探索。
+* 対象テーブルの列構造（`name` または `full_name`）をその場で動的解析します。
+* RadioID.netからインポートされた名簿特有の、コールサイン末尾に含まれる不可視の改行ゴミ（`\r`）をSQLの `REPLACE` 処理で完全破壊し、クリーンな状態で突合します。
+* CSV3列目に格納されている「団体名（`TokaiDigitalCommunicationHAMClub`等）」や「ファーストネーム」を丸ごと1列統合型で抽出。
+* `wp-content/uploads/hotspot/{ノード名}/inbox-*.json` へクリーンに保存します。
 
-# リアルタイムログ確認
-sudo journalctl -u hotspot_watch -f
-```
+
+4. **フロントエンドでのリアルタイム描画 (`hotspot-display.php`):**
+ショートコード `[hotspot_log_display]` が配置されたWebページは、30秒ごとにバックグラウンド（AJAX）で最新のJSONファイルを読み込み、最新の交信順（重複コールサインは最新1件に集約）に並び替えて名前付きでHTMLテーブルを出力します。
+
+### ② CSVダウンロードの流れ
+
+1. 親プラグインがインポートしたマスターデータをMySQL（`wp_dmrcm_users`）に安全に保持。
+2. ユーザーがWebUI上でコールサインとDMR IDを入力すると、DBレコードと完全一致照合して認証を行います。
+3. `Dmr_radio_csv_maker.php` がHytera H1などの無線機表示幅に最適化された列配置（名前・団体名を優先した独自レイアウト）のカスタムCSVを動的生成し、`Dmr_radio_csv_downloader.php` を通じて安全にユーザーへ配信します。
 
 ---
 
-## 必要環境
+## 📊 5. 名簿データベースの正確な保持構造
 
-### WordPress側
+`hotspot-receiver.php` および `hotspot-display.php` がダイレクトに読みに行くMySQLテーブルの物理構造は以下の通りです。
 
-| 項目 | 要件 |
-|---|---|
-| WordPress | 5.0以上 |
-| PHP | 7.4以上 |
-| パーマリンク設定 | 「基本」以外（REST API使用のため） |
-| ファイル書き込み権限 | `wp-content/uploads/hotspot/` |
-
-### Pi-Star側
-
-| 項目 | 要件 |
-|---|---|
-| OS | Pi-Star / WPSD |
-| Python | 3.x |
-| ネットワーク | インターネット接続必須 |
+| カラム名（物理名） | 格納データ型 | 説明・最新の吸収ロジック |
+| --- | --- | --- |
+| **`callsign`** | VARCHAR等 | 無線局のコールサイン。末尾にインポート時の `\r`（改行コード）が含まれている場合があるため、プラグイン側で完全除去して照合。 |
+| **`name`** または **`full_name`** | VARCHAR等 | ユーザー名・クラブ団体名。RadioID.netの**user.csvの3列目データが1つの列に丸ごと格納**されている（4列目のLAST_NAMEは空のため、この列のみで名前解決が完了する）。 |
+| **`radio_id`** | INT / VARCHAR | 7桁のDMR ID番号。 |
 
 ---
 
-## 各コンポーネントの詳細
+## 🛠️ 6. 各コンポーネントの変更履歴
 
-### hotspot_setup.sh（v2.2.2）
+| 日付 | 該当コンポーネント | 変更・修正内容（バージョン） |
+| --- | --- | --- |
+| **2026-05-20** | **hotspot-receiver.php (v4.2.0)**<br>
 
-Pi-Star上でMMDVMログを監視し、交信データをWordPressへ送信するサービスをセットアップするシェルスクリプトです。実行すると `hotspot_watch.py` と `hotspot_watch.service` を自動生成・登録します。
+<br>**hotspot-display.php (v4.2.0)** | **【最新・名簿DB完全直結化】**<br>
 
-**主な特徴：**
-- 起動時に既存ログをスキップ（過去交信の再送信を防止）
-- 複数Pi-Starから同一ノードへの送信に対応
-- `source_node`・`net_label` フィールドで送信元・ネットワークを識別
+<br>・テキストキャッシュ方式を廃止し、MySQLの `wp_dmrcm_users` テーブルへのダイレクト検索ロジックを両ファイルに実装。<br>
 
-→ 詳細: `README.md` / `INSTALL.md`
+<br>・`\r` ゴミによる一致判定空振りをSQLレベルで完全解決。<br>
 
----
+<br>・CSV3列目の統合型団体名（`TokaiDigitalCommunicationHAMClub`等）が `---` にならず100%出力されるよう二重のガードロジックを構築。<br>
 
-### hotspot-total-v2.php（v2.4.12）
+<br>・表示と受信の処理を完全に2ファイルへ分離。 |
+| **2026-05-19** | **hotspot_watch_test.py (v4.1.0)** | **【最新・WPSDログ同期＆フライング防止】**<br>
 
-交信ログの受信・保存・表示を担うWordPressプラグインです。
+<br>・WPSDログの可変スペースを正規表現（`re`モジュール）で完全吸収。<br>
 
-**主な特徴：**
-- REST APIでPi-Starからの交信データを受信・保存
-- radioid.netのuser.csvでコールサインから名前を自動補完
-- NW優先ロジック（5秒以内の同時受信はNWを優先）
-- 30秒ごとのAJAX自動更新でリアルタイム表示
-- キャッシュ無効化対応
-- `hotspot_setup.sh` のwget配信エンドポイント内蔵
-
-→ 詳細: `README-hotspot-total-v2.md`
+<br>・`voice header` での送信を廃止し、`end of voice` / `transmission lost`（交信確定時）に1発だけクリーンに送る仕様へ修正。 |
+| 2026-04-14 | hotspot-total-v2.php (v2.4.12) | 30秒ごとの自動リロード（AJAX）およびキャッシュ無効化ヘッダーの試験導入。 |
+| 2026-04-14 | hotspot_setup.sh (v2.2.2) | ネットワーク識別用の `net_label`（英数10文字以内）入力項目の追加。 |
+| 2026-04-08 | システム全般 | システム初版リリース。旧Pi-Star形式のJSONパケットによる運用開始。 |
 
 ---
 
-### dmr-radio-csv-maker.php（v1.4.3）
-
-radioid.netのuser.csvをもとに、無線機用コンタクトリストCSVを生成・提供するWordPressプラグインです。
-
-**主な特徴：**
-- コールサイン・DMR IDによる認証（radioid.net登録ユーザーのみ）
-- 国別フィルター対応
-- 通常CSV・H1用CSV（Hytera H1等）の2形式を提供
-- H1用CSVは無線機画面での視認性を優先した列配置
-- ダウンロード履歴を管理画面で確認可能
-
-→ 詳細: `README-dmr-radio-csv-maker.md`
-
----
-
-## ドキュメント一覧
-
-| ファイル | 対象 | 内容 |
-|---|---|---|
-| `README-system.md`（本ファイル） | システム全体 | 全体構成・相関・セットアップ順序 |
-| `README.md` | hotspot_setup.sh | シェルスクリプトの概要・目的・送信データ形式 |
-| `INSTALL.md` | hotspot_setup.sh | インストール手順・トラブルシューティング |
-| `README-hotspot-total-v2.md` | hotspot-total-v2.php | プラグインの機能・設定・仕様・変更履歴 |
-| `README-dmr-radio-csv-maker.md` | dmr-radio-csv-maker.php | プラグインの機能・認証・CSV仕様 |
-
----
-
-## 変更履歴（システム全体）
-
-| 日付 | 変更内容 |
-|---|---|
-| 2026-04-14 | キャッシュ無効化・AJAX自動更新（30秒）実装（v2.4.12） |
-| 2026-04-14 | NW優先ロジックに5秒タイムアウト追加（v2.4.11） |
-| 2026-04-14 | 起動時の過去ログスキップ処理追加（v2.2.2/v2.4.10） |
-| 2026-04-14 | ネットワーク表示名（net_label）をSrc列に表示（v2.4.9） |
-| 2026-04-14 | セットアップにnet_label入力項目追加（v2.2.2） |
-| 2026-04-14 | source_node・net_labelフィールド追加（v2.2.1/v2.4.8） |
-| 2026-04-14 | NW優先保存ロジック実装（v2.4.6） |
-| 2026-04-10 | 通し番号（No.列）追加、表幅改善（v2.4.4） |
-| 2026-04-10 | ログ表示UIスマート化・バッジ表示（v2.4.0） |
-| 2026-04-10 | setup.sh wgetエンドポイント追加（v2.3.0） |
-| 2026-04-08 | システム初版リリース |
-
----
-
-*あいちデジタル通信ハムクラブ JJ2YYK*
+*あいちデジタル通信ハムクラブ JJ2YYK / JI2TAB*
