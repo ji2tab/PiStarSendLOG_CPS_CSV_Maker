@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Hotspot Receiver (データ受取部)
+ * Plugin Name: Hotspot Receiver (データ受取部 - 負荷対策済版)
  * Plugin URI:  https://github.com/ji2tab/PiStarSendLOG_V2
- * Description: [フォルダ集約・分離版] 外部ノードからの受信ログをREST APIで受け取り、単一JSONリングバッファへ格納します。名前解決はMaster Baseに委譲。DDNSドメイン(xlx168.mydns.jp)による動的IPホワイトリスト防壁を搭載。
- * Version:     1.2.0
+ * Description: [フォルダ集約・分離版] 外部ノードからの受信ログをREST APIで受け取り、単一JSONリングバッファへ格納します。名前解決はMaster Baseに委譲。DDNSドメイン(xlx168.mydns.jp)による動的IPホワイトリスト防壁をキャッシュ化（負荷激減対策済み）。
+ * Version:     1.3.0
  * Author:      JI2TAB / JJ2YYK
  * License:     GPL2
  */
@@ -94,21 +94,8 @@ add_action('rest_api_init', function () {
 });
 
 function hld_handle_ingest(WP_REST_Request $request) {
-    // ── 1. 安全なアクセス元検証 (DDNS動的IPホワイトリスト防壁) ──
-    $pi_star_ddns = 'xlx168.mydns.jp'; 
-    
-    // 現在のPi-Starの動的IPをリアルタイムDNS照会
-    $current_allowed_ip = gethostbyname($pi_star_ddns);
-    
-    // アクセスしてきた送信元の実際のIP
-    $client_ip = $_SERVER['REMOTE_ADDR'] ?? '';
-
-    // 送信元IPがDDNSのIPと一致しない場合は、WordPressを動かさずに即座に完全遮断
-    if ($current_allowed_ip !== $client_ip && $current_allowed_ip !== $pi_star_ddns) {
-        return new WP_Error('forbidden_ip', 'Access denied. Unauthorized source IP.', array('status' => 403));
-    }
-
-    // ── 2. 従来のAPIトークン検証 ──
+    // ── 1. 【最優先】従来のAPIトークン検証（超高速・低負荷判定） ──
+    // 一番軽量な文字列照合を先頭に行うことで、無駄なDNS引きやデータベース処理を未然に防ぎます。
     $saved_token = get_option('hotspot_api_token');
     if (empty($saved_token)) {
         return new WP_Error('no_token_configured', 'APIトークン未設定', array('status' => 500));
@@ -126,6 +113,28 @@ function hld_handle_ingest(WP_REST_Request $request) {
 
     if (!hash_equals((string)$saved_token, (string)$client_token)) {
         return new WP_Error('unauthorized', '認証エラー', array('status' => 401));
+    }
+
+    // ── 2. 安全なアクセス元検証 (DNSキャッシュ化による軽量化防壁) ──
+    $client_ip = $_SERVER['REMOTE_ADDR'] ?? '';
+
+    // 自分自身（ローカルホスト）からの通信、または内部ループバックは無条件でパス
+    if ($client_ip !== '127.0.0.1' && $client_ip !== '::1' && $client_ip !== '') {
+        $pi_star_ddns = 'xlx168.mydns.jp'; 
+        
+        // WordPressのTransient APIを使い、名前解決結果を10分間キャッシュ（毎回の外部通信を防止）
+        $current_allowed_ip = get_transient('hld_allowed_node_ip');
+        
+        if (false === $current_allowed_ip) {
+            $current_allowed_ip = gethostbyname($pi_star_ddns);
+            // 10分間有効なキャッシュとして保存
+            set_transient('hld_allowed_node_ip', $current_allowed_ip, 10 * MINUTE_IN_SECONDS);
+        }
+
+        // IPが一致せず、かつDNSの引き込みに失敗していない場合のみアクセスを拒絶(403)
+        if ($current_allowed_ip !== $client_ip && $current_allowed_ip !== $pi_star_ddns) {
+            return new WP_Error('forbidden_ip', 'Access denied. Unauthorized source IP.', array('status' => 403));
+        }
     }
 
     // ── 3. 各種サニタイズおよびデータパース ──
