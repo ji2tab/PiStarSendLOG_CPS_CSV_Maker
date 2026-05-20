@@ -1,229 +1,92 @@
-# DMR Hotspot Log System
+承知いたしました。
+システム全体仕様書（`README-system.md`）とは別に、エンドユーザーや運用者が GitHub リポジトリ（`PiStarSendLOG_CPS_CSV_Maker`）のトップページで最初に目にするための、**シンプルで分かりやすい `README.md**` を作成しました。
 
-**システム名:** DMR Hotspot Log System  
-**作成者:** JI2TAB / あいちデジタル通信ハムクラブ JJ2YYK
+システムの概要から、ワンライナー（1行コマンド）でのインストール・アンインストール手順までを簡潔にまとめています。
 
----
-
-## システム概要
-
-DMR（Digital Mobile Radio）ホットスポットへの交信ログをリアルタイムでWebサイトに表示し、DMRユーザーデータベースのCSVファイルを無線機へダウンロード提供するシステムです。
-
-Pi-Star（Raspberry Pi）上の監視サービスと、WordPressプラグイン群が連携して動作します。
+これをリポジトリの `README.md` として保存してご活用ください。
 
 ---
 
-## 構成コンポーネント
+# DMR Hotspot Watcher (for Pi-Star / WPSD)
 
-| ファイル | 種別 | 動作環境 |
-|---|---|---|
-| `hotspot_setup.sh` | シェルスクリプト | Pi-Star（Raspberry Pi） |
-| `hotspot-total-v2.php` | WordPressプラグイン | WordPress（Webサーバー） |
-| `dmr-radio-csv-maker.php` | WordPressプラグイン | WordPress（Webサーバー） |
+DMR（Digital Mobile Radio）ホットスポット環境（Pi-Star / WPSD）から、交信確定時のログをリアルタイムで検知し、WordPress 等の外部サーバーへ送信する軽量な監視デーモンです。
 
----
+DMRユーザーデータベース（CSV）と連携するサーバー側のプラグイン（`hotspot-receiver` 等）と組み合わせることで、自局のダッシュボードに「名前（団体名）付き」で超高速な交信履歴を構築できます。
 
-## システム構成図
+## 🌟 特徴
 
-```
-【Pi-Star / Raspberry Pi】
-┌─────────────────────────────────────┐
-│  MMDVM（DMRホットスポット）          │
-│    ↓ 交信発生                        │
-│  /var/log/pi-star/MMDVM-*.log       │
-│    ↓ 監視                            │
-│  hotspot_watch.py                   │
-│  （hotspot_setup.sh で生成・登録）   │
-└──────────────┬──────────────────────┘
-               │ POST /wp-json/hotspot/ingest
-               │ JSON形式で交信データを送信
-               ↓
-【WordPress / Webサーバー】
-┌─────────────────────────────────────────────────────┐
-│  hotspot-total-v2.php                               │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ REST API受信エンドポイント                   │   │
-│  │  ↓ トークン認証                              │   │
-│  │  ↓ radioid.net user.csv で名前を検索         │   │
-│  │  ↓ JSONファイルとして保存                    │   │
-│  │    uploads/hotspot/{ノード名}/inbox-*.json   │   │
-│  └─────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ WP-Cron（毎日1回）                          │   │
-│  │  ↓ radioid.net から user.csv を取得・保存   │   │
-│  │    uploads/hotspot/_cache/user.csv          │   │
-│  └─────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ ショートコード [hotspot_log_display]         │   │
-│  │  → 交信ログをWebページに表示                │   │
-│  └─────────────────────────────────────────────┘   │
-│                                                     │
-│  dmr-radio-csv-maker.php                           │
-│  ┌─────────────────────────────────────────────┐   │
-│  │ ショートコード [dmr_csv_maker]               │   │
-│  │  → コールサイン・DMR IDで認証               │   │
-│  │  → user.csv から国別CSVを生成・提供         │   │
-│  │  → ダウンロードログを記録                   │   │
-│  └─────────────────────────────────────────────┘   │
-│                                                     │
-│  GET /wp-json/hotspot/setup.sh                     │
-│  （hotspot_setup.sh をwgetで配信）                  │
-└─────────────────────────────────────────────────────┘
-               ↑
-【無線機ユーザー（ブラウザ）】
-  コールサイン・DMR IDで認証
-  → 通常CSV / H1用CSV をダウンロード
-  → 無線機のコンタクトリストにインポート
-```
+* **WPSDログ完全対応:** WPSD特有のスペース形式や遅延検知（late entry）を正規表現で自動吸収。
+* **フライング送信の防止:** 話し始め（`voice header`）ではなく、交信確定時（`end of voice` / `transmission lost`）をトリガーに1回だけクリーンに送信します。
+* **超軽量な常駐プロセス:** Python のファイルシーク監視（0.5秒間隔）を使用し、Raspberry Pi の CPU・メモリにほとんど負荷をかけません。
+* **全自動インストール:** ワンライナーコマンド一発で、環境構築から systemd へのサービス登録・自動起動まで完了します。
 
 ---
 
-## データの流れ
+## 📥 インストール方法
 
-### 1. 交信ログの流れ
-```
-PTTを押して離す
-  → MMDVMがログに記録
-  → hotspot_watch.py が検出
-  → WordPress REST APIへPOST送信
-  → JSONファイルとして保存
-  → Webページに表示（[hotspot_log_display]）
+Pi-Star または WPSD の SSHターミナル（コンソール）にログインし、以下の1行コマンド（ワンライナー）を貼り付けて実行してください。
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ji2tab/PiStarSendLOG_CPS_CSV_Maker/main/install.sh | sudo bash
+
 ```
 
-### 2. CSVダウンロードの流れ
-```
-radioid.net → user.csv取得（毎日1回・WP-Cron）
-  → uploads/hotspot/_cache/user.csv に保存
+### セットアップの流れ
 
-ユーザーがCSVダウンロードページにアクセス
-  → コールサイン・DMR IDを入力
-  → user.csv と照合して認証
-  → 国を選択
-  → 通常CSV または H1用CSV を生成・ダウンロード
-  → ダウンロードログに記録
+実行すると、自動的にファイルシステムの書き込み権限（`rpi-rw`）が解放され、スクリプトのダウンロードが行われます。
+途中で以下の情報を聞かれますので、環境に合わせて入力してください。
+
+1. **WordPressサーバーのドメイン名** (例: `jj2yyk.forums.gr.jp`)
+2. **このホットスポットの識別ノード名** (例: `yyk-tgif`)
+3. **APIトークン** (WordPress側で設定したセキュアなパスワード文字列)
+
+入力完了後、`hotspot_watch.service` として自動的にバックグラウンド起動します。
+
+---
+
+## 🗑️ アンインストール方法
+
+システムから監視デーモンを完全に削除し、元の状態に戻したい場合は、以下のコマンドを実行してください。
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ji2tab/PiStarSendLOG_CPS_CSV_Maker/main/uninstall.sh | sudo bash
+
 ```
 
-### 3. セットアップスクリプトの配信
+実行すると、サービスの停止、systemdからの登録解除、および関連するすべてのスクリプトファイルが自動的に削除されます。
+
+---
+
+## ⚙️ 動作確認とログの表示
+
+インストール後、サービスが正常に動作しているか確認するには、以下のコマンドを実行します。
+リアルタイムで送信状況や、デバイスの健康状態（CPU温度 / メモリ使用率）が確認できます。
+
+```bash
+# リアルタイムログの表示 (終了するには Ctrl + C)
+sudo journalctl -u hotspot_watch -f
+
 ```
-Pi-Star管理者
-  → wget https://yoursite/wp-json/hotspot/setup.sh
-  → hotspot_setup.sh を取得
-  → 実行してhotspot_watch.py とサービスを設定
+
+**ログの出力例:**
+
+```text
+ 🟢 WP送信成功 [200]: JI2TAB 📡 [RF] ➔ TGIF168 (TG: 1) [45.1°C/Mem:24.5%]
+
+```
+
+サービスの再起動や手動停止を行う場合は以下のコマンドを使用します。
+
+```bash
+sudo systemctl restart hotspot_watch
+sudo systemctl stop hotspot_watch
+
 ```
 
 ---
 
-## ファイル・フォルダ構成
+## 📄 ライセンス
 
-### WordPress側（Webサーバー）
-```
-wp-content/
-  plugins/
-    hotspot-total-v2/
-      hotspot-total-v2.php      ← 交信ログ受信・表示・CSV管理
-    dmr-radio-csv-maker/
-      dmr-radio-csv-maker.php   ← CSVダウンロード提供
-  uploads/
-    hotspot/
-      _cache/
-        user.csv                ← radioid.netから取得したユーザーDB
-        download_log.csv        ← CSVダウンロードログ
-      {ノード名}/
-        inbox-YYYYMMDD-HHmmss.json  ← 交信ログ（1交信1ファイル）
-```
+This project is licensed under the GPLv2 License.
 
-### Pi-Star側（Raspberry Pi）
-```
-/root/
-  hotspot_setup.sh     ← セットアップスクリプト
-  hotspot_watch.py     ← MMDVMログ監視・送信スクリプト（自動生成）
-/etc/systemd/system/
-  hotspot_watch.service  ← systemdサービス定義（自動生成）
-/var/log/pi-star/
-  MMDVM-YYYY-MM-DD.log   ← MMDVMが出力する交信ログ（監視対象）
-```
-
----
-
-## 各コンポーネントの役割
-
-### hotspot_setup.sh
-Pi-Star上でMMDVMログを監視し、交信データをWordPressへ送信するサービスをセットアップするシェルスクリプトです。  
-実行すると `hotspot_watch.py` と `hotspot_watch.service` を自動生成・登録します。  
-→ 詳細: `readme.md`
-
-### hotspot-total-v2.php
-交信ログの受信・保存・表示を担うWordPressプラグインです。  
-Pi-StarからのPOSTを受け取り、radioid.netのCSVで名前を補完してJSONに保存します。  
-またWP-Cronで毎日user.csvを自動取得し、`hotspot_setup.sh` のwget配信も担当します。  
-→ 詳細: `Readme_hotspot_total_v2.md`
-
-### dmr-radio-csv-maker.php
-radioid.netのuser.csvをもとに、無線機用のコンタクトリストCSVを生成・提供するWordPressプラグインです。  
-コールサインとDMR IDによる認証を経てダウンロードでき、ダウンロード履歴を管理画面で確認できます。  
-→ 詳細: `Readme_dmr_radio_csv_maker.md`
-
----
-
-## セットアップ順序
-
-```
-1. WordPress側の準備
-   ├─ hotspot-total-v2.php をインストール・有効化
-   ├─ 管理画面でトークン・ノード名を設定
-   ├─ user.csv を手動取得（「今すぐ取得」ボタン）
-   └─ dmr-radio-csv-maker.php をインストール・有効化
-
-2. Pi-Star側の準備
-   ├─ wget で hotspot_setup.sh を取得
-   ├─ chmod +x して実行権限付与
-   └─ sudo で実行（サーバー・ノード名・トークンを入力）
-
-3. 動作確認
-   ├─ PTTを押して離す
-   ├─ journalctl -u hotspot_watch -f でログ確認
-   └─ Webサイトのアクセス状況ページで表示確認
-```
-
----
-
-## APIエンドポイント一覧
-
-| エンドポイント | メソッド | 用途 |
-|---|---|---|
-| `/wp-json/hotspot/ingest` | POST | Pi-Starから交信ログを受信 |
-| `/wp-json/hotspot/setup.sh` | GET | hotspot_setup.shをwgetで配信 |
-
----
-
-## 必要環境
-
-### WordPress側
-| 項目 | 要件 |
-|---|---|
-| WordPress | 5.0以上 |
-| PHP | 7.4以上 |
-| パーマリンク設定 | 「基本」以外 |
-| ファイル書き込み権限 | `wp-content/uploads/hotspot/` |
-
-### Pi-Star側
-| 項目 | 要件 |
-|---|---|
-| OS | Pi-Star / WPSD |
-| Python | 3.x |
-| ネットワーク | インターネット接続必須 |
-
----
-
-## ドキュメント一覧
-
-| ファイル | 対象 | 内容 |
-|---|---|---|
-| `README.md`（本ファイル） | システム全体 | 全体構成・相関・セットアップ順序 |
-| `readme.md` | hotspot_setup.sh | シェルスクリプトの概要・目的 |
-| `Readme_hotspot_total_v2.md` | hotspot-total-v2.php | プラグインの機能・設定・仕様 |
-| `Readme_dmr_radio_csv_maker.md` | dmr-radio-csv-maker.php | プラグインの機能・認証・CSV仕様 |
-
----
-
-*あいちデジタル通信ハムクラブ JJ2YYK*
+*Created by JI2TAB / あいちデジタル通信ハムクラブ JJ2YYK*
