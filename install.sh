@@ -8,6 +8,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}=========================================================${NC}"
@@ -64,7 +65,7 @@ input_host=${input_host:-jj2yyk.forums.gr.jp}
 input_node=${input_node:-yyk-tgif}
 input_token=${input_token:-Zn3d9vs2PZu35Hm}
 
-# ダウンロードしたPythonスクリプトの設定部分を置換 (sedを使用)
+# ダウンロードしたPythonスクリプトの設定部分を置換
 sed -i "s/^SERVER_HOST  = .*/SERVER_HOST  = \"${input_host}\"/" "${INSTALL_DIR}/${SCRIPT_NAME}"
 sed -i "s/^NODE_NAME    = .*/NODE_NAME    = \"${input_node}\"/" "${INSTALL_DIR}/${SCRIPT_NAME}"
 sed -i "s/^API_TOKEN    = .*/API_TOKEN    = \"${input_token}\"/" "${INSTALL_DIR}/${SCRIPT_NAME}"
@@ -82,6 +83,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/${SCRIPT_NAME}
 Restart=always
 RestartSec=10
@@ -97,8 +99,21 @@ systemctl daemon-reload
 systemctl enable ${SERVICE_NAME}
 systemctl restart ${SERVICE_NAME}
 
+# =========================================================================
+# 完了メッセージと使い方ガイド
+# =========================================================================
 echo -e "\n${GREEN}=========================================================${NC}"
-echo -e "${GREEN} 🎉 インストールが完了し、サービスが起動しました！${NC}"
-echo -e " 動作状況の確認: ${YELLOW}sudo journalctl -u hotspot_watch -f${NC}"
-echo -e " サービスの停止: ${YELLOW}sudo systemctl stop hotspot_watch${NC}"
+echo -e "${GREEN} 🎉 インストールが完了し、監視サービスが起動しました！${NC}"
+echo -e "${GREEN}=========================================================${NC}"
+echo -e "\n${CYAN}【動作確認の方法】${NC}"
+echo -e " 以下のコマンドをコピーして実行すると、リアルタイムにログを確認できます。"
+echo -e " (終了するにはキーボードの Ctrl + C を押してください)"
+echo -e "   ${YELLOW}sudo journalctl -u hotspot_watch -f${NC}\n"
+
+echo -e "${CYAN}【サービスの管理コマンド】${NC}"
+echo -e " 状態の確認 : ${YELLOW}sudo systemctl status hotspot_watch${NC}"
+echo -e " 再起動     : ${YELLOW}sudo systemctl restart hotspot_watch${NC}"
+echo -e " 停止       : ${YELLOW}sudo systemctl stop hotspot_watch${NC}\n"
+
+echo -e "※ アンインストールしたい場合は、提供されている uninstall.sh を実行してください。"
 echo -e "${GREEN}=========================================================${NC}"
