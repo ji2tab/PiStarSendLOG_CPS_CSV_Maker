@@ -19,7 +19,7 @@ from datetime import datetime
 # ⚙️ 設定項目
 # =========================================================================
 SERVER_HOST  = "jj2yyk.forums.gr.jp"
-API_TOKEN    = "Zn3d9vs2PZu35Hm"
+API_TOKEN    = "APITOKEN"
 NODE_NAME    = "yyk-tgif"
 
 ENDPOINT     = f"https://{SERVER_HOST}/wp-json/hotspot/ingest"
