@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Hotspot Display (表示＆管理ツール部)
  * Plugin URI:  https://github.com/ji2tab/PiStarSendLOG_V2
- * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（TG番号条件付き動的Srcバッジ対応版）
- * Version:     1.1.0
+ * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（TG番号条件付き動的Srcバッジ対応版 / センター寄せCSS内蔵 v1.1.1）
+ * Version:     1.1.1
  * Author:      JI2TAB / JJ2YYK
  * License:     GPL2
  */
@@ -82,7 +82,7 @@ function hld_settings_page() {
     $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
     ?>
     <div class="wrap">
-        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.0]</span></h1>
+        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.1]</span></h1>
 
         <h2 class="nav-tab-wrapper">
             <a href="?page=hotspot-display-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">基本設定</a>
@@ -309,6 +309,50 @@ add_shortcode('hotspot_log_display', function ($atts) {
 
     ob_start();
     ?>
+    <style>
+    /* Hotspot Log Display - layout (plugin built-in, v1.1.1) */
+    .hts-log-wrap{
+        max-width: 900px;          /* お好みで 800〜1100px の範囲で調整 */
+        margin: 0 auto;            /* ← これがセンタリングの本体 */
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0 8px;
+    }
+    .hts-log-wrap .hts-log-table{
+        width: 100%;
+        margin: 0 auto;
+        border-collapse: collapse;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+    .hts-log-wrap .hts-log-table th,
+    .hts-log-wrap .hts-log-table td{
+        padding: 6px 10px;
+        border-bottom: 1px solid #e3e3e3;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .hts-log-wrap .hts-log-table thead th{
+        background:#f5f5f5;
+        border-bottom: 2px solid #ccc;
+        font-weight: 600;
+    }
+    .hts-log-wrap .hts-no{ text-align:right; color:#888; font-variant-numeric: tabular-nums; }
+    .hts-log-wrap .hts-call{ font-weight:700; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .hts-log-wrap .hts-time{ font-family: ui-monospace, Menlo, Consolas, monospace; white-space:nowrap; }
+    .hts-log-wrap .hts-badge{
+        display:inline-block; padding:2px 8px; border-radius:10px;
+        font-size:12px; font-weight:600; line-height:1.4; white-space:nowrap;
+    }
+    .hts-log-wrap .hts-badge-rf{ background:#e8f1fb; color:#1a5fb4; border:1px solid #b6d4f0; }
+    .hts-log-wrap .hts-badge-nw{ background:#fdecec; color:#a4262c; border:1px solid #f3b7b7; }
+    @media (max-width: 600px){
+        .hts-log-wrap{ padding: 0 4px; }
+        .hts-log-wrap .hts-log-table{ font-size:12px; }
+        .hts-log-wrap .hts-log-table th,
+        .hts-log-wrap .hts-log-table td{ padding:4px 6px; }
+    }
+    </style>
     <div class="hts-log-wrap">
         <div class="hts-toolbar" style="display:flex;justify-content:flex-end;align-items:center;gap:10px;margin:0 0 8px;">
             <span id="hts-status" style="font-size:12px;color:#888;"></span>
