@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Hotspot Display (表示＆管理ツール部)
  * Plugin URI:  https://github.com/ji2tab/PiStarSendLOG_V2
- * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（レスポンシブ強制版 v1.1.2）
- * Version:     1.1.2
+ * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（レスポンシブ強制＆Ajax・IDロックバグ修正版 v1.1.5）
+ * Version:     1.1.5
  * Author:      JI2TAB / JJ2YYK
  * License:     GPL2
  */
@@ -82,7 +82,7 @@ function hld_settings_page() {
     $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
     ?>
     <div class="wrap">
-        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.2]</span></h1>
+        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.5]</span></h1>
 
         <h2 class="nav-tab-wrapper">
             <a href="?page=hotspot-display-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">基本設定</a>
@@ -268,7 +268,7 @@ function hld_handle_log_management() {
             $updated_logs[] = array(
                 'node'            => $item_node,
                 'source_node'     => sanitize_text_field($item['source_node']),
-                'net_label'       => sanitize_text_field($item['net_label']), // 編集された内容を保持
+                'net_label'       => sanitize_text_field($item['net_label']), 
                 'callsign'        => strtoupper(trim(sanitize_text_field($item['callsign']))),
                 'timestamp'       => sanitize_text_field($item['timestamp']),
                 'timestamp_local' => sanitize_text_field($item['timestamp']),
@@ -311,7 +311,7 @@ add_shortcode('hotspot_log_display', function ($atts) {
     ?>
     <style>
     /* ========================================================
-       Hotspot Log Display - レスポンシブ強制版 (v1.1.2)
+       Hotspot Log Display - レスポンシブ強制版 (v1.1.5)
        テーマCSSに勝つため !important を多用
        横スクロールを禁止し、長いセルは改行して必ず親幅に収める
        ======================================================== */
@@ -329,9 +329,9 @@ add_shortcode('hotspot_log_display', function ($atts) {
         overflow: visible !important;
     }
 
-    /* スクロール容器を完全に殺す（これが横スクロールの元凶） */
-    .hts-log-wrap #hts-log-container,
-    #hts-log-container{
+    /* IDロックを回避するための新しいクラス指定に変更 */
+    .hts-log-wrap .hts-log-engine,
+    .hts-log-engine{
         display: block !important;
         width: 100% !important;
         max-width: 100% !important;
@@ -425,7 +425,7 @@ add_shortcode('hotspot_log_display', function ($atts) {
             <span id="hts-status" style="font-size:12px;color:#888;"></span>
             <button id="hts-reload-btn" type="button" style="padding:6px 14px;border:1px solid #0073aa;background:#0073aa;color:#fff;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;">&#x21bb; 今すぐ更新</button>
         </div>
-        <div id="hts-log-container">
+        <div class="hts-log-engine">
             <?php echo hld_generate_table_html($rows); ?>
         </div>
     </div>
@@ -451,7 +451,8 @@ add_shortcode('hotspot_log_display', function ($atts) {
                 busy = false;
                 if (btn) { btn.disabled = false; btn.innerHTML = '&#x21bb; 今すぐ更新'; }
                 if (xhr.status === 200 && xhr.responseText) {
-                    var c = document.getElementById('hts-log-container');
+                    // ID固定を解除し、クラスで要素を取得するように変更
+                    var c = document.querySelector('.hts-log-engine');
                     if (c) c.innerHTML = xhr.responseText;
                     if (stat) {
                         var d = new Date();
