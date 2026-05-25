@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Hotspot Display (表示＆管理ツール部)
  * Plugin URI:  https://github.com/ji2tab/PiStarSendLOG_V2
- * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（TG番号条件付き動的Srcバッジ対応版 / センター寄せCSS内蔵 v1.1.1）
- * Version:     1.1.1
+ * Description: [フォルダ集約・分離版] 格納されたJSONログをショートコードでWEB表示（自動・手動更新付き）し、管理画面の「ログデータ管理」タブからデータのインライン編集や削除を行えます。（レスポンシブ強制版 v1.1.2）
+ * Version:     1.1.2
  * Author:      JI2TAB / JJ2YYK
  * License:     GPL2
  */
@@ -82,7 +82,7 @@ function hld_settings_page() {
     $current_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'settings';
     ?>
     <div class="wrap">
-        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.1]</span></h1>
+        <h1>Hotspot Receiver &amp; Display 設定 <span style="font-size:13px;color:#888;">[分離版 v1.1.2]</span></h1>
 
         <h2 class="nav-tab-wrapper">
             <a href="?page=hotspot-display-settings&tab=settings" class="nav-tab <?php echo $current_tab === 'settings' ? 'nav-tab-active' : ''; ?>">基本設定</a>
@@ -310,47 +310,114 @@ add_shortcode('hotspot_log_display', function ($atts) {
     ob_start();
     ?>
     <style>
-    /* Hotspot Log Display - layout (plugin built-in, v1.1.1) */
+    /* ========================================================
+       Hotspot Log Display - レスポンシブ強制版 (v1.1.2)
+       テーマCSSに勝つため !important を多用
+       横スクロールを禁止し、長いセルは改行して必ず親幅に収める
+       ======================================================== */
+
+    /* 一番外側の枠：センター寄せ＆親幅に追従 */
     .hts-log-wrap{
-        max-width: 900px;          /* お好みで 800〜1100px の範囲で調整 */
-        margin: 0 auto;            /* ← これがセンタリングの本体 */
-        width: 100%;
-        box-sizing: border-box;
-        padding: 0 8px;
+        display: block !important;
+        max-width: 1000px !important;     /* お好みで 800〜1200px */
+        width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 8px !important;
+        box-sizing: border-box !important;
+        float: none !important;
+        clear: both !important;
+        overflow: visible !important;
     }
+
+    /* スクロール容器を完全に殺す（これが横スクロールの元凶） */
+    .hts-log-wrap #hts-log-container,
+    #hts-log-container{
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        overflow-x: visible !important;   /* auto をやめる */
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    /* テーブル本体：必ず親幅に収まる */
     .hts-log-wrap .hts-log-table{
-        width: 100%;
-        margin: 0 auto;
-        border-collapse: collapse;
+        display: table !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        border-collapse: collapse !important;
+        table-layout: fixed !important;   /* 列幅をブラウザに勝手に決めさせない */
         font-size: 14px;
         line-height: 1.4;
+        word-break: break-word;
     }
+
+    /* 列幅を「比率」で指定（合計100%）。table-layout:fixed と組み合わせで効く */
+    .hts-log-wrap .hts-log-table col.c-no   { width: 6%; }
+    .hts-log-wrap .hts-log-table col.c-call { width: 22%; }
+    .hts-log-wrap .hts-log-table col.c-name { width: 30%; }
+    .hts-log-wrap .hts-log-table col.c-src  { width: 12%; }
+    .hts-log-wrap .hts-log-table col.c-date { width: 16%; }
+    .hts-log-wrap .hts-log-table col.c-time { width: 14%; }
+
     .hts-log-wrap .hts-log-table th,
     .hts-log-wrap .hts-log-table td{
-        padding: 6px 10px;
-        border-bottom: 1px solid #e3e3e3;
+        padding: 6px 8px !important;
+        border-bottom: 1px solid #e3e3e3 !important;
         text-align: left;
         vertical-align: middle;
+        white-space: normal !important;   /* 改行を許可 */
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        box-sizing: border-box !important;
     }
     .hts-log-wrap .hts-log-table thead th{
-        background:#f5f5f5;
-        border-bottom: 2px solid #ccc;
+        background:#f5f5f5 !important;
+        border-bottom: 2px solid #ccc !important;
         font-weight: 600;
     }
-    .hts-log-wrap .hts-no{ text-align:right; color:#888; font-variant-numeric: tabular-nums; }
-    .hts-log-wrap .hts-call{ font-weight:700; font-family: ui-monospace, Menlo, Consolas, monospace; }
-    .hts-log-wrap .hts-time{ font-family: ui-monospace, Menlo, Consolas, monospace; white-space:nowrap; }
+
+    /* 中身のspanも改行を許す（white-space:nowrap を上書き） */
+    .hts-log-wrap .hts-call,
+    .hts-log-wrap .hts-name,
+    .hts-log-wrap .hts-time,
     .hts-log-wrap .hts-badge{
-        display:inline-block; padding:2px 8px; border-radius:10px;
-        font-size:12px; font-weight:600; line-height:1.4; white-space:nowrap;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        display: inline-block;
+        max-width: 100%;
+    }
+
+    .hts-log-wrap .hts-no   { text-align:right; color:#888; font-variant-numeric: tabular-nums; }
+    .hts-log-wrap .hts-call { font-weight:700; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .hts-log-wrap .hts-time { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .hts-log-wrap .hts-badge{
+        padding:2px 8px; border-radius:10px;
+        font-size:12px; font-weight:600; line-height:1.4;
     }
     .hts-log-wrap .hts-badge-rf{ background:#e8f1fb; color:#1a5fb4; border:1px solid #b6d4f0; }
     .hts-log-wrap .hts-badge-nw{ background:#fdecec; color:#a4262c; border:1px solid #f3b7b7; }
-    @media (max-width: 600px){
-        .hts-log-wrap{ padding: 0 4px; }
-        .hts-log-wrap .hts-log-table{ font-size:12px; }
+
+    /* スマホ：狭い時はフォントを縮め、必要に応じて列幅を再配分 */
+    @media (max-width: 720px){
+        .hts-log-wrap{ padding: 0 4px !important; }
+        .hts-log-wrap .hts-log-table{ font-size: 12px; }
         .hts-log-wrap .hts-log-table th,
-        .hts-log-wrap .hts-log-table td{ padding:4px 6px; }
+        .hts-log-wrap .hts-log-table td{ padding: 4px 5px !important; }
+        .hts-log-wrap .hts-log-table col.c-no   { width: 8%; }
+        .hts-log-wrap .hts-log-table col.c-call { width: 24%; }
+        .hts-log-wrap .hts-log-table col.c-name { width: 24%; }
+        .hts-log-wrap .hts-log-table col.c-src  { width: 14%; }
+        .hts-log-wrap .hts-log-table col.c-date { width: 16%; }
+        .hts-log-wrap .hts-log-table col.c-time { width: 14%; }
+    }
+    @media (max-width: 480px){
+        .hts-log-wrap .hts-log-table{ font-size: 11px; }
+        .hts-log-wrap .hts-badge{ font-size: 10px; padding: 1px 5px; }
     }
     </style>
     <div class="hts-log-wrap">
@@ -358,7 +425,7 @@ add_shortcode('hotspot_log_display', function ($atts) {
             <span id="hts-status" style="font-size:12px;color:#888;"></span>
             <button id="hts-reload-btn" type="button" style="padding:6px 14px;border:1px solid #0073aa;background:#0073aa;color:#fff;border-radius:4px;cursor:pointer;font-size:13px;line-height:1;">&#x21bb; 今すぐ更新</button>
         </div>
-        <div id="hts-log-container" style="overflow-x:auto;width:100%;">
+        <div id="hts-log-container">
             <?php echo hld_generate_table_html($rows); ?>
         </div>
     </div>
@@ -437,7 +504,11 @@ function hld_ajax_refresh_log() {
 // 7. テーブル出力マッピング（新ルール：TG条件付き判定）
 // =========================================================================
 function hld_generate_table_html($rows) {
+    // <colgroup> で列幅をCSSの col.c-xxx に委ねる
     $out  = '<table class="hts-log-table">';
+    $out .= '<colgroup>';
+    $out .= '<col class="c-no"><col class="c-call"><col class="c-name"><col class="c-src"><col class="c-date"><col class="c-time">';
+    $out .= '</colgroup>';
     $out .= '<thead><tr><th>No.</th><th>Callsign</th><th>Name</th><th>Src</th><th>Date</th><th>Time</th></tr></thead><tbody>';
 
     if (empty($rows)) {
